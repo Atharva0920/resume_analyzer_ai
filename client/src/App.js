@@ -19,7 +19,8 @@ const analyzeResume = async (text, industry = 'software_engineering') => {
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorData = await response.json();
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
     }
 
     const data = await response.json();
@@ -31,12 +32,12 @@ const analyzeResume = async (text, industry = 'software_engineering') => {
     }
   } catch (error) {
     console.error('Analysis error:', error);
-    
+
     // Fallback to mock data in development if API is not available
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('Using mock data - ensure backend is running on', API_BASE_URL);
+    if (process.env.NODE_ENV === 'development' && error.message.includes('fetch')) {
+      console.warn('API not available, using mock data. Start FastAPI server:', API_BASE_URL);
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       return {
         contact_info: {
           email: 'john.doe@email.com',
@@ -80,7 +81,7 @@ const analyzeResume = async (text, industry = 'software_engineering') => {
         missing_sections: ['certifications', 'projects']
       };
     }
-    
+
     throw error;
   }
 };
@@ -92,13 +93,14 @@ const analyzeFile = async (file, industry = 'software_engineering') => {
     formData.append('file', file);
     formData.append('industry', industry);
 
-    const response = await fetch(`${API_BASE_URL}/api/analyze`, {
+    const response = await fetch(`${API_BASE_URL}/api/analyze-file`, {
       method: 'POST',
       body: formData
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorData = await response.json();
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
     }
 
     const data = await response.json();
@@ -106,7 +108,9 @@ const analyzeFile = async (file, industry = 'software_engineering') => {
     if (data.success) {
       return {
         analysis: data.analysis,
-        extractedText: data.text_length ? `Successfully extracted ${data.text_length} characters` : ''
+        extractedText: data.text_length ? `Successfully extracted ${data.text_length} characters` : '',
+        processingTime: data.processing_time ? `Processed in ${data.processing_time}s` : '',
+        message: data.message
       };
     } else {
       throw new Error(data.error || 'File analysis failed');
@@ -123,7 +127,10 @@ const checkAPIHealth = async () => {
     const response = await fetch(`${API_BASE_URL}/api/health`);
     if (response.ok) {
       const data = await response.json();
-      return data;
+      return {
+        ...data,
+        url: API_BASE_URL
+      };
     }
     return null;
   } catch (error) {
@@ -153,7 +160,7 @@ const ResumeAnalyzerSPA = () => {
 
   const handleFileUpload = useCallback(async (uploadedFile) => {
     setFile(uploadedFile);
-    
+
     // If it's a real file, try to analyze it via API
     if (uploadedFile instanceof File) {
       try {
@@ -170,7 +177,7 @@ const ResumeAnalyzerSPA = () => {
         return;
       }
     }
-    
+
     // Fallback to mock data for demo
     const mockResumeText = `John Doe
 Software Engineer
@@ -219,7 +226,7 @@ Databases: PostgreSQL, MongoDB, Redis`;
 
   const handleAnalyze = async () => {
     if (!resumeText.trim()) return;
-    
+
     setIsAnalyzing(true);
     try {
       const result = await analyzeResume(resumeText, selectedIndustry);
@@ -262,7 +269,7 @@ Databases: PostgreSQL, MongoDB, Redis`;
       ai_ml: 'bg-red-100 text-red-800',
       soft_skills: 'bg-yellow-100 text-yellow-800'
     };
-    
+
     return (
       <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${colors[category] || 'bg-gray-100 text-gray-800'} mr-2 mb-2`}>
         {skill}
@@ -285,18 +292,18 @@ Databases: PostgreSQL, MongoDB, Redis`;
                 <p className="text-gray-600">Optimize your resume with AI-powered insights</p>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <Star className="w-4 h-4 text-yellow-500" />
-                <span>AI-Powered</span>
-              </div>
-              {/* API Status Indicator */}
-              <div className="flex items-center space-x-2 text-xs">
-                <div className={`w-2 h-2 rounded-full ${apiStatus ? 'bg-green-500' : 'bg-yellow-500'}`} />
-                <span className="text-gray-500">
-                  {apiStatus ? 'API Connected' : isUsingMockData ? 'Demo Mode' : 'Connecting...'}
-                </span>
-              </div>
+          </div>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <Star className="w-4 h-4 text-yellow-500" />
+              <span>AI-Powered</span>
+            </div>
+            {/* API Status Indicator */}
+            <div className="flex items-center space-x-2 text-xs">
+              <div className={`w-2 h-2 rounded-full ${apiStatus ? 'bg-green-500' : 'bg-yellow-500'}`} />
+              <span className="text-gray-500">
+                {apiStatus ? `FastAPI (${apiStatus.version})` : isUsingMockData ? 'Demo Mode' : 'Connecting...'}
+              </span>
             </div>
           </div>
         </div>
