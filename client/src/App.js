@@ -176,6 +176,9 @@ const ResumeAnalyzerSPA = () => {
         setIsAnalyzing(false);
         return;
       }
+      finally {
+      setIsAnalyzing(false);
+      }
     }
 
     // Fallback to mock data for demo
